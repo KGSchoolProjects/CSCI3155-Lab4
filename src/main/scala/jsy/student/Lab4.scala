@@ -131,7 +131,6 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
         case (tgot, _) => err(tgot, e1)
       }
       case Binary(Eq | Ne, e1, e2) => (typeof(env, e1), typeof(env, e2)) match {
-        //1
         case (TFunction(_, _), _) => err(typeof(env, e1), e1)
         case (_, TFunction(_, _)) => err(typeof(env, e2), e2)
         case (t1, t2) if t1 == t2 => t1
@@ -152,7 +151,6 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       }
       case Binary(Seq, e1, e2) => typeof(env, e1); typeof(env, e2)
       case If(e1, e2, e3) => typeof(env, e1) match {
-        //1
         case TBool => {
           if (typeof(env, e2) == typeof(env, e3)) typeof(env, e2) else err(typeof(env, e3), e3)
         }
@@ -162,20 +160,34 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
         // Bind to env1 an environment that extends env with an appropriate binding if
         // the function is potentially recursive.
         val env1 = (p, tann) match {
-          /***** Add cases here *****/
+          case (Some(func), Some(retTyp)) => {
+            val tFunc = TFunction(params, retTyp)
+            extend(env, func, tFunc)
+          }
+          case (None, _) => env
           case _ => err(TUndefined, e1)
         }
         // Bind to env2 an environment that extends env1 with bindings for params.
-        val env2 = ???
+        val env2 = params.foldLeft(env1) {
+          case (acc, (x, mt)) => acc + (x -> mt.t)
+        }
+
         // Infer the type of the function body
-        val t1 = ???
-        // Check with the possibly annotated return type
-        ???
+        val t1 = tann match {
+          case Some(retTyp) => {
+            val ret = typeof(env2, e1)
+            if (ret == retTyp) ret else err(ret, e1)
+          }
+          case None => typeof(env2, e1)
+        }
       }
       case Call(e1, args) => typeof(env, e1) match {
         case TFunction(params, tret) if (params.length == args.length) =>
           (params zip args).foreach {
-            ???
+            case((_,MTyp(_,ti)),arg) => {
+              val argt = typeof(env,arg)
+              if (ti != argt) err(argt,e1)
+            }
           };
           tret
         case tgot => err(tgot, e1)
@@ -187,19 +199,6 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
   
   
   /* Small-Step Interpreter */
-
-
-  def toNumber(v: Expr): Double = {
-    require(isValue(v))
-    (v: @unchecked) match {
-      case N(n) => n
-      case B(true) => 1
-      case B(false) => 0
-      case Undefined => Double.NaN
-      case S(s) => try s.toDouble catch {case _: NumberFormatException => Double.NaN}
-      case Function(_, _, _,_) => Double.NaN
-    }
-  }
   /*
    * Helper function that implements the semantics of inequality
    * operators Lt, Le, Gt, and Ge on values.
@@ -221,11 +220,11 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
         case Gt => s1 > s2
         case Ge => s1 >= s2
       }
-      case _ => bop match {
-        case Lt => toNumber(v1) < toNumber(v2)
-        case Le => toNumber(v1) <= toNumber(v2)
-        case Gt => toNumber(v1) > toNumber(v2)
-        case Ge => toNumber(v1) >= toNumber(v2)
+      case (N(n1), N(n2)) => bop match {
+        case Lt => n1 < n2
+        case Le => n1 <= n2
+        case Gt => n1 > n2
+        case Ge => n1 >= n2
       }
     }
   }
