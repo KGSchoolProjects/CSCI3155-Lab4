@@ -180,6 +180,7 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
           }
           case None => typeof(env2, e1)
         }
+        TFunction(params,t1)
       }
       case Call(e1, args) => typeof(env, e1) match {
         case TFunction(params, tret) if (params.length == args.length) =>
@@ -192,8 +193,17 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
           tret
         case tgot => err(tgot, e1)
       }
-      case Obj(fields) => ???
-      case GetField(e1, f) => ???
+      case Obj(fields) => {
+        val tfields = fields.mapValues {
+          case(exp) => typeof(env,exp)
+        }
+        TObj(tfields)
+      }
+
+      case GetField(e1, f) => (e1.getClass.getDeclaredField(f)) match {
+        case (field) => typeof(env,field.get(e1).asInstanceOf[Expr])
+        }
+
     }
   }
   
@@ -248,18 +258,21 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       case Binary(bop, e1, e2) => Binary(bop,substitute(e1,esub,x),substitute(e2,esub,x))
       case If(e1, e2, e3) => If(substitute(e1,esub,x),substitute(e2,esub,x),substitute(e3,esub,x))
       case Var(y) => if (x == y) esub else Var(y)
-      case Decl(mode, y, e1, e2) => ???
+      case Decl(mode, y, e1, e2) => {
+        if (x == y) Decl(mode, y, substitute(e1, esub, x), e2)
+        else Decl(mode, y, substitute(e1, esub, x), substitute(e2, esub, x))
+      }
         /***** Cases needing adapting from Lab 3 */
       case Function(p, params, tann, e1) =>
         ???
-      case Call(e1, args) => ???
+      case Call(e1, args) => Call(subst(e1), args.map{arg => subst(arg)})
         /***** New cases for Lab 4 */
-      case Obj(fields) => ???
-      case GetField(e1, f) => ???
+      case Obj(fields) => Obj(fields.map{case (field,exp) => (field, subst(exp))})
+      case GetField(e1, f) => GetField(subst(e1), f)
     }
 
-    val fvs = freeVars(???)
-    def fresh(x: String): String = if (???) fresh(x + "$") else x
+    val fvs = freeVars(e)
+    def fresh(x: String): String = if (fvs.contains(x)) fresh(x + "$") else x
     subst(???)
   }
 
@@ -302,8 +315,8 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
 
   /* Check whether or not an expression is reduced enough to be applied given a mode. */
   def isRedex(mode: Mode, e: Expr): Boolean = mode match {
-    case MConst => ???
-    case MName => ???
+    case MConst => isValue(e)
+    case MName => true
   }
 
   def step(e: Expr): Expr = {
@@ -312,8 +325,33 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       /* Base Cases: Do Rules */
       case Print(v1) if isValue(v1) => println(pretty(v1)); Undefined
         /***** Cases needing adapting from Lab 3. */
-      case Unary(Neg, v1) if isValue(v1) => ???
-        /***** More cases here */
+      case Unary(Neg, N(n1)) => N(-n1)
+      case Unary(Not, B(b1)) => B(!b1)
+
+      case Binary(Seq, v1, e2) if isValue(v1) => e2
+
+      case Binary(And, B(b1), e2) => if (b1) e2 else B(true)
+      case Binary(Or, B(b1), e2) => if (b1) B(true) else e2
+
+      case Binary(bop @ (Plus|Minus|Times|Div), N(n1), N(n2)) => bop match {
+        case Plus => N(n1 + n2)
+        case Minus => N(n1 - n2)
+        case Times => N(n1 * n2)
+        case Div => N(n1 / n2)
+      }
+      case Binary(Plus, S(s1), S(s2)) => S(s1+s2)
+
+      case Binary(bop @ (Lt|Le|Gt|Ge), N(n1), N(n2)) => B(inequalityVal(bop, N(n1), N(n2)))
+      case Binary(bop @ (Lt|Le|Gt|Ge), S(s1), S(s2)) => B(inequalityVal(bop, S(s1), S(s2)))
+
+      case Binary(bop @ (Eq|Ne), v1, v2) if isValue(v1) && isValue(v2) => bop match {
+        case Eq => B(v1 == v2)
+        case Ne => B(v1 != v2)
+      }
+      case If(B(b1), e2, e3) => if (b1) e2 else e3
+
+      case Decl(mode, x, e1, e2) if isRedex(mode, e1) => substitute(e2, e1, x)
+      /***** More cases here */
       case Call(v1, args) if isValue(v1) =>
         v1 match {
           case Function(p, params, _, e1) => {
@@ -341,11 +379,18 @@ object Lab4 extends jsy.util.JsyApplication with Lab4Like {
       /* Inductive Cases: Search Rules */
       case Print(e1) => Print(step(e1))
         /***** Cases from Lab 3. */
-      case Unary(uop, e1) => ???
-        /***** More cases here */
+      case Unary(uop, e1) => Unary(uop, step(e1))
+
+      case Binary(bop, v1, e2) if isValue(v1) => Binary(bop, v1, step(e2))
+      case Binary(bop, e1, e2) => Binary(bop, step(e1), e2)
+
+      case If(e1, e2, e3) => If(step(e1), e2, e3)
+
+      case Decl(mode, x, e1, e2) => Decl(mode, x, step(e1), e2)
+
+      case Call(e1, args) => Call(step(e1), args)
         /***** Cases needing adapting from Lab 3 */
-      case Call(v1 @ Function(_, _, _, _), args) => ???
-      case Call(e1, args) => ???
+      //case Call(v1 @ Function(_, _, _, _), args) => Call(v1, step(args))
         /***** New cases for Lab 4. */
 
       /* Everything else is a stuck error. Should not happen if e is well-typed.
