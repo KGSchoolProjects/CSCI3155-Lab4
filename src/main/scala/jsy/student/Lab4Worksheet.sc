@@ -18,10 +18,11 @@ import jsy.student.Lab4._
 //val cr1 = compressRec(List(1, 2, 2, 3, 3, 3))
 
 // Parse functions with possibly multiple parameters and type annotations.
-parse("function fst(x: number, y: number): number { return x }")
-parse("function (x: number) { return x }")
-parse("function (f: (y: number) => number, x: number) { return f(x) }")
-
+iterateStep(parse("function fst(x: number, y: number): number { return x }"))
+iterateStep(parse("function (x: number) { return x }"))
+iterateStep(parse("function (f: (y: number) => number, x: number) { return f(x) }"))
+//parse("const factorial = function f(n : number) : number {if (n == 0) return 1}")
+//iterateStep("Decl(MConst,factorial,Function(Some(f),List((n,MTyp(MConst,TNumber))),Some(TNumber),If(Binary(Eq,Var(n),N(0.0)),N(1.0),Binary(Times,Var(n),Call(Var(f),List(Binary(Minus,Var(n),N(1.0))))))))")
 // Parse objects
 parse("{ f: 0, g: true }")
 parse("x.f")
